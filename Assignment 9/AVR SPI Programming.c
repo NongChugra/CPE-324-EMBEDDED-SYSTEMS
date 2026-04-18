@@ -1,172 +1,244 @@
-#define F_CPU 8000000UL //8MHz
+#define F_CPU 8000000UL
 
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 #include <stdio.h>
-#include <stdint.h>
 
-// --- LCD Pin Definitions (PC0-PC3 Data, PB0-PB1 Control) ---
-#define LCD_DATA_PORT PORTC
-#define LCD_DATA_DDR DDRC
-#define LCD_CTRL_PORT PORTB
-#define LCD_CTRL_DDR DDRB
+#define LCD_DATA_PORT PORTD
+#define LCD_DATA_DDR DDRD
 
-#define LCD_E_PIN PB1
-#define LCD_RS_PIN PB0
+#define LCD_E_PORT PORTD
+#define LCD_E_DDR DDRD
+#define LCD_E_PIN PD0
 
-#define DS1307_ADDRESS 0x68
+#define LCD_RS_PORT PORTD
+#define LCD_RS_DDR DDRD
+#define LCD_RS_PIN PD1
 
-// ==========================
+// =====================================
+// GLOBALS
+// =====================================
+volatile uint8_t spiByteCount = 0;
+volatile uint8_t spiHighByte = 0;
+volatile uint8_t spiLowByte = 0;
+volatile uint16_t adcValue = 0;
+volatile uint8_t adcReady = 0;
+
+// =====================================
 // LCD FUNCTIONS
-// ==========================
-void commitData() {
-    LCD_CTRL_PORT |= (1 << LCD_E_PIN);
+// =====================================
+
+void commitData()
+{
+    LCD_E_PORT |= (1 << LCD_E_PIN);
     _delay_us(1);
-    LCD_CTRL_PORT &= ~(1 << LCD_E_PIN);
+    LCD_E_PORT &= ~(1 << LCD_E_PIN);
     _delay_us(100);
 }
 
-void SendLCDCommand(uint8_t command) {
-    LCD_CTRL_PORT &= ~(1 << LCD_RS_PIN);
-    LCD_DATA_PORT = (LCD_DATA_PORT & 0xF0) | (command >> 4);
+void SendLCDCommand(uint8_t command)
+{
+    // RS = 0
+    LCD_RS_PORT &= ~(1 << LCD_RS_PIN);
+
+    // high nibble
+    LCD_DATA_PORT &= 0x0F;
+    LCD_DATA_PORT |= (command & 0xF0);
     commitData();
-    LCD_DATA_PORT = (LCD_DATA_PORT & 0xF0) | (command & 0x0F);
+
+    // low nibble
+    LCD_DATA_PORT &= 0x0F;
+    LCD_DATA_PORT |= ((command << 4) & 0xF0);
     commitData();
+
     _delay_ms(2);
 }
 
-void SendLCDData(uint8_t data) {
-    LCD_CTRL_PORT |= (1 << LCD_RS_PIN);
-    LCD_DATA_PORT = (LCD_DATA_PORT & 0xF0) | (data >> 4);
+void SendLCDData(uint8_t data)
+{
+    // RS = 1
+    LCD_RS_PORT |= (1 << LCD_RS_PIN);
+
+    // high nibble
+    LCD_DATA_PORT &= 0x0F;
+    LCD_DATA_PORT |= (data & 0xF0);
     commitData();
-    LCD_DATA_PORT = (LCD_DATA_PORT & 0xF0) | (data & 0x0F);
+
+    // low nibble
+    LCD_DATA_PORT &= 0x0F;
+    LCD_DATA_PORT |= ((data << 4) & 0xF0);
     commitData();
+
     _delay_ms(2);
 }
 
-void SendLCDString(const char *str) {
-    while (*str) SendLCDData(*str++);
+void SendLCDString(const char *str)
+{
+    while (*str)
+    {
+        SendLCDData(*str++);
+    }
 }
 
-void LCD_SetCursor(uint8_t row, uint8_t col) {
-    uint8_t address = (row == 0) ? (0x80 + col) : (0xC0 + col);
+void LCD_SetCursor(uint8_t row, uint8_t col)
+{
+    uint8_t address;
+
+    if (row == 0)
+        address = 0x80 + col;
+    else
+        address = 0xC0 + col;
+
     SendLCDCommand(address);
 }
 
-void initLCD() {
-    LCD_DATA_DDR |= 0x0F;
-    
-    LCD_CTRL_DDR |= (1 << LCD_E_PIN) | (1 << LCD_RS_PIN);
-    
-    _delay_ms(50);
+void initLCD()
+{
+    // PD4..PD7 output for data
+    LCD_DATA_DDR |= 0xF0;
+    LCD_DATA_PORT &= ~0xF0;
+
+    // E and RS outputs
+    LCD_E_DDR |= (1 << LCD_E_PIN);
+    LCD_RS_DDR |= (1 << LCD_RS_PIN);
+
+    LCD_E_PORT &= ~(1 << LCD_E_PIN);
+    LCD_RS_PORT &= ~(1 << LCD_RS_PIN);
+
+    _delay_ms(40);
+
+    // init sequence
     SendLCDCommand(0x33);
     SendLCDCommand(0x32);
+
     SendLCDCommand(0x28);
     SendLCDCommand(0x0C);
     SendLCDCommand(0x01);
     SendLCDCommand(0x06);
+    _delay_ms(2);
 }
 
-// ==========================
-// I2C FUNCTIONS
-// ==========================
-void I2C_Init() {
-    TWBR = 32;
-    TWSR = 0;
-    // SCL Freq = F_CPU / (16+2(TWBR)+Prescaler)
-    // SCL Freq = 100kHz
+// =====================================
+// SPI INIT
+// =====================================
+
+void SPI_Init()
+{
+    // MOSI, SCK, CS output
+    DDRB |= (1 << PB3) | (1 << PB5) | (1 << PB2);
+
+    // MISO input
+    DDRB &= ~(1 << PB4);
+
+    // CS high (inactive)
+    PORTB |= (1 << PB2);
+
+    // SPI Enable, Master, SPI Interrupt Enable
+    // Clock = fosc/8
+    SPCR = (1 << SPE) | (1 << MSTR) | (0 << SPR1) | (1 << SPR0) | (1 << SPIE);
+    SPSR = (1 << SPI2X);
 }
 
-void I2C_Start() {
-    TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWSTA);
-    while (!(TWCR & (1 << TWINT)));
+// Start reading MCP3201 (2 bytes)
+void MCP3201_StartConversion()
+{
+    adcReady = 0;
+    spiByteCount = 0;
+
+    // CS low
+    PORTB &= ~(1 << PB2);
+
+    // start first transfer (dummy)
+    SPDR = 0;
 }
 
-void I2C_Stop() {
-    TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWSTO);
-    _delay_us(100);
+// SPI Interrupt: runs after each byte transfer complete
+ISR(SPI_STC_vect)
+{
+    uint8_t received = SPDR;
+
+    if (spiByteCount == 0)
+    {
+        spiHighByte = received;
+        spiByteCount++;
+
+        // start second transfer
+        SPDR = 0;
+    }
+    else
+    {
+        spiLowByte = received;
+
+        // CS high (end)
+        PORTB |= (1 << PB2);
+
+        // MCP3201 format extraction
+        adcValue = (((uint16_t)(spiHighByte & 0x1F)) << 8 | spiLowByte) >> 1;
+        adcReady = 1;
+    }
 }
 
-void I2C_Write(uint8_t data) {
-    TWDR = data;
-    TWCR = (1 << TWINT) | (1 << TWEN);
-    while (!(TWCR & (1 << TWINT)));
+// =====================================
+// TIMER1
+// =====================================
+// Trigger ADC read every 500 ms
+
+void Timer1_Init()
+{
+    TCCR1A = 0;
+    TCCR1B = 0;
+
+    // CTC mode (Clear Timer on Compare Match)
+    TCCR1B |= (1 << WGM12) | (0 << WGM11) | (0 << WGM10);
+
+    // prescaler = 256
+    TCCR1B |= (1 << CS12) | (0 << CS11) | (0 << CS10);
+
+    // 8000000 Hz / 256 = 31250 Hz
+    OCR1A = 15624;
+
+    // enable compare interrupt
+    TIMSK1 |= (1 << OCIE1A);
 }
 
-uint8_t I2C_Read_ACK() {
-    TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
-    while (!(TWCR & (1 << TWINT)));
-    return TWDR;
+ISR(TIMER1_COMPA_vect)
+{
+    MCP3201_StartConversion();
 }
 
-uint8_t I2C_Read_NACK() {
-    TWCR = (1 << TWINT) | (1 << TWEN);
-    while (!(TWCR & (1 << TWINT)));
-    return TWDR;
-}
-
-// ==========================
-// RTC HELPERS
-// ==========================
-uint8_t BCD_to_DEC(uint8_t bcd) { return ((bcd >> 4) * 10) + (bcd & 0x0F); }
-uint8_t DEC_to_BCD(uint8_t dec) { return ((dec / 10) << 4) | (dec % 10); }
-
-void DS1307_SetTime(uint8_t s, uint8_t m, uint8_t h, uint8_t d, uint8_t dt, uint8_t mt, uint8_t y) {
-    I2C_Start();
-    I2C_Write(DS1307_ADDRESS << 1);
-    I2C_Write(0x00);
-    I2C_Write(DEC_to_BCD(s)); // Seconds (Starts Oscillator)
-    I2C_Write(DEC_to_BCD(m)); // Minutes
-    I2C_Write(DEC_to_BCD(h)); // Hours
-    I2C_Write(DEC_to_BCD(d)); // Day of week
-    I2C_Write(DEC_to_BCD(dt)); // Date
-    I2C_Write(DEC_to_BCD(mt)); // Month
-    I2C_Write(DEC_to_BCD(y)); // Year
-    I2C_Stop();
-}
-
-void DS1307_ReadTime(uint8_t *sec, uint8_t *min, uint8_t *hour, uint8_t *date, uint8_t *month, uint8_t *year) {
-    I2C_Start();
-    I2C_Write(DS1307_ADDRESS << 1);
-    I2C_Write(0x00);
-    I2C_Start(); // Repeated Start
-    I2C_Write((DS1307_ADDRESS << 1) | 1);
-    *sec = BCD_to_DEC(I2C_Read_ACK() & 0x7F);
-    *min = BCD_to_DEC(I2C_Read_ACK());
-    *hour = BCD_to_DEC(I2C_Read_ACK() & 0x3F);
-    I2C_Read_ACK(); // Skip Day
-    *date = BCD_to_DEC(I2C_Read_ACK());
-    *month = BCD_to_DEC(I2C_Read_ACK());
-    *year = BCD_to_DEC(I2C_Read_NACK());
-    I2C_Stop();
-}
-
-// ==========================
+// =====================================
 // MAIN
-// ==========================
-int main(void) {
-    char buffer[17];
-    uint8_t sec, min, hour, date, month, year;
-    
+// =====================================
+
+int main(void)
+{
     initLCD();
-    I2C_Init();
+    SPI_Init();
+    Timer1_Init();
 
-    // SET THE TIME
-    //(sec, min, hour, day_of_week, date, month, year)
-    // Sunday = 1. Year = 26.
-    DS1307_SetTime(0, 40, 20, 1, 5, 4, 26);
+    sei();
 
-    while (1) {
-        DS1307_ReadTime(&sec, &min, &hour, &date, &month, &year);
-        
-        LCD_SetCursor(0, 0);
-        snprintf(buffer, 17, "TIME: %02d:%02d:%02d", hour, min, sec);
-        SendLCDString(buffer);
-        
-        LCD_SetCursor(1, 0);
-        snprintf(buffer, 17, "DATE: %02d/%02d/%02d", date, month, year);
-        SendLCDString(buffer);
-        
-        _delay_ms(500);
+    char line[17];
+
+    SendLCDCommand(0x01);
+    LCD_SetCursor(0, 0);
+    SendLCDString("Temp Sensor");
+
+    while (1)
+    {
+        if (adcReady)
+        {
+            adcReady = 0;
+
+            // Convert ADC -> voltage -> temperature
+            float voltage = (adcValue * 5.0f) / 4096.0f;
+            float tempC = (voltage - 0.5f) / 0.01f;
+
+            // display
+            LCD_SetCursor(1, 0);
+            snprintf(line, 16, "T = %.2f C      ", tempC);
+            SendLCDString(line);
+        }
     }
 }
