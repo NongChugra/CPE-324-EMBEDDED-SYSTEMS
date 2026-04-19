@@ -981,23 +981,23 @@ void DS1307_ReadTime(uint8_t *sec, uint8_t *min, uint8_t *hour,
 //     0   | INT0 disabled
 //     1   | INT0 enabled   ← used here
 
-void initINT0()
-{
-    // PD2 (INT0) as input + enable pull-up
-    DDRD &= ~(1 << PD2);
-    PORTD |= (1 << PD2);
+// void initINT0()
+// {
+//     // PD2 (INT0) as input + enable pull-up
+//     DDRD &= ~(1 << PD2);
+//     PORTD |= (1 << PD2);
 
-    // Falling edge trigger
-    EICRA |= (1 << ISC01) | (0 << ISC00);
+//     // Falling edge trigger
+//     EICRA |= (1 << ISC01) | (0 << ISC00);
 
-    // Enable INT0
-    EIMSK |= (1 << INT0);
-}
+//     // Enable INT0
+//     EIMSK |= (1 << INT0);
+// }
 
-ISR(INT0_vect)
-{
-    // Insert interrupt handling code here
-}
+// ISR(INT0_vect)
+// {
+//     // Insert interrupt handling code here
+// }
 
 // ================================================================================================================
 // ALL FOR ONE Setup
