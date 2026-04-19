@@ -159,13 +159,13 @@ void my_delay_ms(uint16_t ms)
 #define LCD_DATA_PORT PORTC
 #define LCD_DATA_DDR DDRC
 
-#define LCD_E_PORT PORTB
-#define LCD_E_DDR DDRB
-#define LCD_E_PIN PB6
+#define LCD_E_PORT PORTC
+#define LCD_E_DDR DDRC
+#define LCD_E_PIN PC4
 
-#define LCD_RS_PORT PORTB
-#define LCD_RS_DDR DDRB
-#define LCD_RS_PIN PB7
+#define LCD_RS_PORT PORTC
+#define LCD_RS_DDR DDRC
+#define LCD_RS_PIN PC5
 
 void commitData()
 {
@@ -181,22 +181,22 @@ void SendLCDCommand(uint8_t command)
     LCD_RS_PORT &= ~(1 << LCD_RS_PIN);
 
     // send high nibble case pin 4-7
-    LCD_DATA_PORT &= 0x0F;
-    LCD_DATA_PORT |= (command & 0xF0);
+    // LCD_DATA_PORT &= 0x0F;
+    // LCD_DATA_PORT |= (command & 0xF0);
 
     // send high nibble case pin 0-3
-    // LCD_DATA_PORT &= 0xF0;
-    // LCD_DATA_PORT |= (command >> 4);
+    LCD_DATA_PORT &= 0xF0;
+    LCD_DATA_PORT |= (command >> 4);
 
     commitData();
 
     // send low nibble case pin 4-7
-    LCD_DATA_PORT &= 0x0F;
-    LCD_DATA_PORT |= ((command & 0x0F) << 4);
+    // LCD_DATA_PORT &= 0x0F;
+    // LCD_DATA_PORT |= ((command & 0x0F) << 4);
 
     // send low nibble case pin 0-3
-    // LCD_DATA_PORT &= 0xF0;
-    // LCD_DATA_PORT |= (command & 0x0F);
+    LCD_DATA_PORT &= 0xF0;
+    LCD_DATA_PORT |= (command & 0x0F);
 
     commitData();
 
@@ -209,22 +209,22 @@ void SendLCDData(uint8_t data)
     LCD_RS_PORT |= (1 << LCD_RS_PIN);
 
     // send high nibble case pin 4-7
-    LCD_DATA_PORT &= 0x0F;
-    LCD_DATA_PORT |= (data & 0xF0);
+    // LCD_DATA_PORT &= 0x0F;
+    // LCD_DATA_PORT |= (data & 0xF0);
 
     // send low nibble case pin 0-3
-    // LCD_DATA_PORT &= 0xF0;
-    // LCD_DATA_PORT |= (data >> 4);
+    LCD_DATA_PORT &= 0xF0;
+    LCD_DATA_PORT |= (data >> 4);
 
     commitData();
 
     // send low nibble case pin 4-7
-    LCD_DATA_PORT &= 0x0F;
-    LCD_DATA_PORT |= ((data & 0x0F) << 4);
+    // LCD_DATA_PORT &= 0x0F;
+    // LCD_DATA_PORT |= ((data & 0x0F) << 4);
 
     // send low nibble case pin 0-3
-    // LCD_DATA_PORT &= 0xF0;
-    // LCD_DATA_PORT |= (data & 0x0F);
+    LCD_DATA_PORT &= 0xF0;
+    LCD_DATA_PORT |= (data & 0x0F);
 
     commitData();
 
@@ -267,12 +267,12 @@ void LCD_InitSequence()
 void LCD_init()
 {
     // DATA pins output (PORTx4-PORTx7)
-    LCD_DATA_DDR |= 0xF0;
-    LCD_DATA_PORT &= ~0xF0;
+    // LCD_DATA_DDR |= 0xF0;
+    // LCD_DATA_PORT &= ~0xF0;
 
     // DATA pins output (PORTx0-PORTx3)
-    // LCD_DATA_DDR |= 0x0F;
-    // LCD_DATA_PORT &= ~0x0F;
+    LCD_DATA_DDR |= 0x0F;
+    LCD_DATA_PORT &= ~0x0F;
 
     // E and RS outputs
     LCD_E_DDR |= (1 << LCD_E_PIN);
@@ -329,7 +329,7 @@ LCD DISPLAY:
 // SendLCDString("VALUE:");
 //
 // LCD_SetCursor(0, 6);
-// snprintf(buffer, sizeof(buffer), "%d", num);
+// snprintf(buffer, 16, "%d", num);
 // SendLCDString(buffer);
 
 /*
@@ -422,7 +422,7 @@ char keypad_scan()
             {
                 if (!(col_state & (1 << (col + COL_SHIFT))))
                 {
-                    my_delay_ms(50); // debounce
+                    my_delay_ms(20); // debounce
                     return keymap[row][col];
                 }
             }
@@ -537,6 +537,7 @@ void ultrasonic_trigger()
 
 // Trigger, read and print distance ----------------
 // ultrasonic_trigger();
+// _delay_ms(100);
 // if(DistanceReady != 0)
 // {
 //     DistanceReady = 0;
@@ -626,6 +627,7 @@ ISR(SPI_STC_vect)
 
 // Start conversion, read and print value ----------
 // MCP3201_StartConversion();
+// _delay_ms(100);
 // if (adcReady != 0)
 // {
 //     adcReady = 0;
@@ -654,7 +656,7 @@ void I2C_Init(void)
     TWBR = 32;   // Bit rate register
     TWSR = 0x00; // Prescaler = 1
 
-    TWCR = (1 << TWEN); // Enable TWI
+    TWCR = (1 << TWEN); // Enable I2C
 }
 
 void I2C_Start(void)
@@ -818,6 +820,11 @@ void DS1307_ReadTime(uint8_t *sec, uint8_t *min, uint8_t *hour,
 //
 // snprintf(buffer, 17, "DAY: %s", GetDayName(day));
 // SendLCDString(buffer);
+
+// convert adc code, temp, potentiometer, photoresister
+// PWM
+// Interrupt
+// adc
 
 // ==========================================================
 // ALL FOR ONE Setup
