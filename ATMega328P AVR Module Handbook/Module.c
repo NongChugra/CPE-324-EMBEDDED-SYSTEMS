@@ -8,6 +8,9 @@
 // BootLoader Check (Blink Code)
 // ==========================================================
 
+// #define F_CPU 8000000UL
+// #include <util/delay.h>
+//
 // int main(void){
 //     DDRB |= (1 << DDB1);
 //
@@ -351,9 +354,9 @@ VALUE:25
 #define KEYPAD_ROW_DDR DDRD
 
 // COL PORT (INPUT)
-#define KEYPAD_COL_PORT PORTC
-#define KEYPAD_COL_DDR DDRC
-#define KEYPAD_COL_PIN PINC
+#define KEYPAD_COL_PORT PORTD
+#define KEYPAD_COL_DDR DDRD
+#define KEYPAD_COL_PIN PIND
 
 // -------- CASE A: ROW 0-3 , COL 0-3 --------
 // #define ROW_MASK    0x0F
@@ -419,7 +422,7 @@ char keypad_scan()
             {
                 if (!(col_state & (1 << (col + COL_SHIFT))))
                 {
-                    my_delay_ms(200); // debounce
+                    my_delay_ms(50); // debounce
                     return keymap[row][col];
                 }
             }
@@ -470,12 +473,12 @@ ISR(TIMER1_CAPT_vect)
 
     if (TCCR1B & (1 << ICES1)) // Rising edge detected
     {
-        StartTick = ICR1;
+        startTick = ICR1;
         TCCR1B &= ~(1 << ICES1); // switch to falling edge
     }
     else // Falling edge detected
     {
-        EndTick = ICR1;
+        endTick = ICR1;
 
         // Handle overflow case
         if (endTick >= startTick)
@@ -584,7 +587,7 @@ void MCP3201_StartConversion()
     spiByteCount = 0;
 
     // SS low (start)
-    MCP3201_CS_PORT &= ~(1 << MCP3201_CS_PIN);
+    PORTB &= ~(1 << PB2);
 
     // Start first transfer (dummy byte)
     SPDR = 0x00;
@@ -607,7 +610,7 @@ ISR(SPI_STC_vect)
         spiLowByte = received;
 
         // SS high (end transaction)
-        MCP3201_CS_PORT |= (1 << MCP3201_CS_PIN);
+        PORTB |= (1 << PB2);
 
         // MCP3201 extraction (12-bit)
         // adcValue = [HighByte(4:0) + LowByte(7:0)] >> 1
