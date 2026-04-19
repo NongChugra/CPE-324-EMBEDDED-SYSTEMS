@@ -4,9 +4,9 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 
-// ==========================================================
+// ================================================================================================================
 // BootLoader Check (Blink Code)
-// ==========================================================
+// ================================================================================================================
 
 // #define F_CPU 8000000UL
 // #include <util/delay.h>
@@ -22,9 +22,9 @@
 //     }
 // }
 
-// ==========================================================
+// ================================================================================================================
 // TIMER0 DELAY MODULE (CTC MODE)
-// ==========================================================
+// ================================================================================================================
 //
 // void delay_init()
 // {
@@ -61,9 +61,9 @@
 //     }
 // }
 
-// ==========================================================
+// ================================================================================================================
 // TIMER1 DELAY MODULE (CTC MODE)
-// ==========================================================
+// ================================================================================================================
 //
 // void delay_init()
 // {
@@ -89,9 +89,9 @@
 //     TIFR1 |= (1 << OCF1A); // Clear flag again
 // }
 
-// ==========================================================
+// ================================================================================================================
 // TIMER2 DELAY MODULE (CTC MODE)
-// ==========================================================
+// ================================================================================================================
 
 void delay_init()
 {
@@ -147,9 +147,9 @@ void my_delay_ms(uint16_t ms)
 // delay 100 us ------------------------------------
 // my_delay_us(100);
 
-// ==========================================================
+// ================================================================================================================
 // LCD MODULE (4-bit mode)
-// ==========================================================
+// ================================================================================================================
 
 // LCD D4 -> PORTx4 -> PORTx0
 // LCD D5 -> PORTx5 -> PORTx1
@@ -336,9 +336,9 @@ LCD DISPLAY:
 VALUE:25
 */
 
-// ==========================================================
+// ================================================================================================================
 // KEYPAD MODULE (4x4 MATRIX)
-// ==========================================================
+// ================================================================================================================
 
 // Rows = OUTPUT
 // Cols = INPUT with pull-up
@@ -445,9 +445,9 @@ char keypad_scan()
 //     SendLCDString(buffer);
 // }
 
-// ==========================================================
+// ================================================================================================================
 // ULTRASONIC SENSOR MODULE (HC-SR04)
-// ==========================================================
+// ================================================================================================================
 
 // ULTRASONIC pins:
 // TRIG -> PB1 (OUTPUT)
@@ -546,9 +546,9 @@ void ultrasonic_trigger()
 //     SendLCDString(buffer);
 // }
 
-// ==========================================================
+// ================================================================================================================
 // SPI MODULE (ATMega328P + MCP3201 ADC)
-// ==========================================================
+// ================================================================================================================
 
 // adcValue ready (0-4095)
 
@@ -565,7 +565,7 @@ volatile uint8_t spiLowByte = 0;
 volatile uint16_t adcValue = 0;
 volatile uint8_t adcReady = 0;
 
-void SPI_Init()
+void SPI_init()
 {
     // MOSI, SCK, SS output
     DDRB |= (1 << PB3) | (1 << PB5) | (1 << PB2);
@@ -637,9 +637,9 @@ ISR(SPI_STC_vect)
 //     SendLCDString(buffer);
 // }
 
-// ==========================================================
+// ================================================================================================================
 // I2C (TWI) MODULE (DS1307 RTC + ATmega328P)
-// ==========================================================
+// ================================================================================================================
 
 // I2C pins:
 //   SCL = PC5
@@ -648,7 +648,7 @@ ISR(SPI_STC_vect)
 // DS1307 I2C Address (7-bit)
 #define DS1307_ADDRESS 0x68
 
-void I2C_Init(void)
+void I2C_init(void)
 {
     // SCL = F_CPU / (16 + 2 * TWBR * Prescaler)
     // F_CPU = 8MHz, TWBR = 32, Prescaler = 1
@@ -821,14 +821,187 @@ void DS1307_ReadTime(uint8_t *sec, uint8_t *min, uint8_t *hour,
 // snprintf(buffer, 17, "DAY: %s", GetDayName(day));
 // SendLCDString(buffer);
 
-// convert adc code, temp, potentiometer, photoresister
-// PWM
-// Interrupt
-// adc
+// ================================================================================================================
+// ADC MODULE (ATMega328P)
+// ================================================================================================================
 
-// ==========================================================
+// volatile uint16_t adcInternalValue = 0;
+// volatile uint8_t adcInternalReady = 0;
+//
+// void InitADC()
+// {
+//     // ADMUX[MUX3:0] selects ADC input channel
+//     //
+//     // MUX3 MUX2 MUX1 MUX0   | ADC Channel | Arduino Pin | AVR Pin
+//     // ------------------------------------------------------------
+//     //  0    0    0    0     |   ADC0      |     A0      |  PC0
+//     //  0    0    0    1     |   ADC1      |     A1      |  PC1
+//     //  0    0    1    0     |   ADC2      |     A2      |  PC2
+//     //  0    0    1    1     |   ADC3      |     A3      |  PC3
+//
+//     ADMUX |= (1 << MUX0); // Select ADC1 (PC1 pin)
+//     ADMUX = (1 << REFS0); // AVcc reference (5V)
+//
+//     // 8MHz / 64 = 125kHz ADC clock (50-200kHz is recommended)
+//     ADCSRA = (1 << ADEN) |                // ADC Enable
+//              (1 << ADIE) |                // ADC Interrupt Enable
+//              (1 << ADPS2) | (1 << ADPS1); // prescaler = 64
+//
+//     // Start first conversion
+//     ADCSRA |= (1 << ADSC);
+// }
+//
+// ISR(ADC_vect)
+// {
+//     adcInternalValue = ADC; // 10-bit result (0–1023)
+//
+//     // Code to process adcValue can be added here, or set a flag to process in main loop
+//     adcInternalReady = 1; // Plase set after processing adcInternalValue to avoid race condition
+//
+//     // for continueous conversion, start next conversion
+//     ADCSRA |= (1 << ADSC);
+// }
+
+// ============================================================================================================
+// GENERAL ADC CONVERSION
+// ============================================================================================================
+
+#define ADC_MAX_F 1023.0f
+#define VREF 5.0f
+
+// float adc_f = (float)adcValue;
+
+// Voltage (0-VREF)
+// float voltage_V = (adc_f * VREF) / ADC_MAX_F;
+// float voltage_mV = (adc_f * VREF * 1000.0f) / ADC_MAX_F;
+
+// Potentiometer (0–100 %)
+// float percent = (adc_f * 100.0f) / ADC_MAX_F;
+
+// LDR (Light Dependent Resistor) (Bright → ADC high | Dark → ADC low)
+// Invert so that now output is high when bright
+// float light_val = ADC_MAX_F - adc_f;
+
+// ── MCP9700 (Temperature Sensor) (-40°C - +125°C)
+// Voltage = °C * 10 + 500
+// float temp_C = (voltage_mV - 500.0f) / 10.0f;
+
+// ============================================================================================================
+// PWM MODULE
+// ============================================================================================================
+
+// Timer0 Fast PWM on pin OC0A (PD6)
+//
+// TCCR0A – Timer/Counter Control Register A
+//
+//   WGM01 WGM00 | Mode
+//   ————————————|——————————————
+//     0     0   | Normal
+//     0     1   | Phase Correct PWM
+//     1     1   | Fast PWM  ← used here
+//
+//   COM0A1 COM0A0 | OC0A Behavior (Fast PWM)
+//   ———————————————|————————————————————————————
+//      1      0    | Clear on Compare Match, Set on TOP  ← used here
+//      1      1    | Set on Compare Match, Clear on TOP
+//
+// TCCR0B – Timer/Counter Control Register B
+//
+//   CS02 CS01 CS00 | Prescaler     | f_PWM (at 8MHz)
+//   ———————————————|———————————————|————————————————
+//    0    0    0   | Timer stopped |      —
+//    0    0    1   | /1            |  31.250 kHz
+//    0    1    0   | /8            |   3.9   kHz  ← used here
+//    0    1    1   | /64           |    490   Hz
+//    1    0    0   | /256          |    122   Hz
+//    1    0    1   | /1024         |     31   Hz
+//
+// f_PWM = f_clk / (Prescaler * 256)
+// at 8MHz, Prescaler=8: f_PWM = 8,000,000 / (8 * 256) = ~3906 Hz
+
+// void InitPWM()
+// {
+//     // PD6 (OC0A) as output
+//     DDRD |= (1 << PD6);
+//
+//     // Fast PWM mode
+//     // Clear OC0A on Compare Match, Set on TOP
+//     TCCR0A = (1 << WGM01) | (1 << WGM00) |
+//              (1 << COM0A1) | (0 << COM0A0);
+//
+//     // Prescaler = 8 → f_PWM ≈ 3.9 kHz at 8MHz
+//     TCCR0B = (0 << CS02) | (1 << CS01) | (0 << CS00);
+//
+//     // Duty cycle 0% on init (best practice)
+//     OCR0A = 0;
+// }
+
+// PWM DUTY CYCLE CONTROL
+
+// OCR0A controls duty cycle (0–255)
+//
+//   OCR0A |  Duty Cycle
+//   ———————|—————————————
+//     0    |    0%
+//    128   |   50%
+//    255   |  100%
+
+// void PWM_SetRaw(uint8_t value)
+// {
+//     OCR0A = value;
+// }
+
+// ================= USAGE EXAMPLE =================
+// Init --------------------------------------------
+// InitPWM();
+
+// PWM + ADC Combo ---------------------------------
+// Map ADC (0–1023) → PWM (0–255)
+// OCR0A = (uint8_t)(adcValue >> 2);
+
+// ================================================================================================================
+// INT0 MODULE (ATMega328P)
+// ================================================================================================================
+
+// External Interrupt 0 on pin INT0 (PD2)
+//
+// EICRA – External Interrupt Control Register A
+//
+//   ISC01 ISC00 | Trigger Condition
+//   ————————————|——————————————————————
+//     0     0   | Low level
+//     0     1   | Any logical change
+//     1     0   | Falling edge  ← used here
+//     1     1   | Rising edge
+//
+// EIMSK – External Interrupt Mask Register
+//
+//   INT0 | Effect
+//   ——————|————————————————
+//     0   | INT0 disabled
+//     1   | INT0 enabled   ← used here
+
+void initINT0()
+{
+    // PD2 (INT0) as input + enable pull-up
+    DDRD &= ~(1 << PD2);
+    PORTD |= (1 << PD2);
+
+    // Falling edge trigger
+    EICRA |= (1 << ISC01) | (0 << ISC00);
+
+    // Enable INT0
+    EIMSK |= (1 << INT0);
+}
+
+ISR(INT0_vect)
+{
+    // Insert interrupt handling code here
+}
+
+// ================================================================================================================
 // ALL FOR ONE Setup
-// ==========================================================
+// ================================================================================================================
 
 int main(void)
 {
@@ -839,8 +1012,12 @@ int main(void)
     keypad_init();
     ultrasonic_init();
 
-    SPI_Init();
-    I2C_Init();
+    SPI_init();
+    I2C_init();
+
+    // initADC();
+    // initPWM();
+    // initINT0();
 
     sei(); // Enable global interrupts
 

@@ -123,7 +123,7 @@ void initLCD()
 // SPI INIT
 // =====================================
 
-void SPI_Init()
+void SPI_init()
 {
     // MOSI, SCK, CS output
     DDRB |= (1 << PB3) | (1 << PB5) | (1 << PB2);
@@ -214,7 +214,7 @@ ISR(TIMER1_COMPA_vect)
 int main(void)
 {
     initLCD();
-    SPI_Init();
+    SPI_init();
     Timer1_Init();
 
     sei();
